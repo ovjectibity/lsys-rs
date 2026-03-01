@@ -4,21 +4,47 @@ use std::cell::RefCell;
 
 //NN: 
 //Weight matrix multiply & then apply non-linearity
-// struct FFN {
-    
-// }
+pub struct FFN {
+    pub layers: Vec<Tensor>
+}
 
-// impl FFN {
-//     fn new() -> Self {
-//         Tensor t1 = 
+impl FFN {
+    pub fn new() -> Self {
+        let mut t1 = Tensor::new_direct(
+            23,
+            vec![4], 
+            vec![1.0,2.0,3.0,4.0]);
+        let linear = 
+            Rc::new(RefCell::new(LinearLayer::new(vec![1.0,1.0,1.0,1.0,
+                                                                1.0,1.0,1.0,1.0,
+                                                                1.0,1.0,1.0,1.0,
+                                                                1.0,1.0,1.0,1.0,
+                                                                1.0,1.0,1.0,1.0])));
+        let mut t2 = Tensor::new_composed(
+            43,
+            vec![5],vec![t1.clone()],vec![],linear);
+        println!("T1 has: {:?} parents",t1.parents.len());
+        println!("T2 has: {:?} parents",t2.parents.len());
+        println!("T1 has: {:?} children",t1.children.len());
+        println!("T2 has: {:?} children",t2.children.len());
+        // let relu = 
+        //     Rc::new(RefCell::new(ReluLayer::new()));
+        // let t3 = Tensor::new_composed(
+        //     499,
+        //     vec![5],vec![t2.clone()],vec![],relu);
+        t1.add_child(t2.clone());
+        println!("T1 has: {:?} children",t1.children.len());
+        println!("T2 has: {:?} children",t2.children.len());
+        println!("T1 has: {:?} parents",t1.parents.len());
+        println!("T2 has: {:?} parents",t2.parents.len());
+        // t2.add_child(t3.clone());
+        FFN {
+            layers: vec![t1,t2]
+        }
+    }
+}
 
-//         FFN {
-
-//         }
-//     }
-// }
-
-trait ComputationNode {
+pub trait ComputationNode {
     fn forward(&mut self);
     fn backward(&mut self);
     fn get_activations(&self) -> Rc<RefCell<Vec<f64>>>;
@@ -52,13 +78,25 @@ trait TensorFunction {
     //Returns [num_size, num_params] Jacobian
     fn gradient_wrt_params(&self,args: &Vec<Tensor>) -> Vec<f64>;
     fn get_num_params(&self) -> i64;
+    fn get_params(&self) -> Vec<f64>;
 }
 
 struct ReluLayer {
 
 }
 
+impl ReluLayer {
+    fn new() -> Self {
+        ReluLayer {
+        }
+    }
+}
+
 impl TensorFunction for ReluLayer {
+    fn get_params(&self) -> Vec<f64> {
+        vec![]
+    }
+
     fn get_num_params(&self) -> i64 {
         0
     }
@@ -109,7 +147,19 @@ struct LinearLayer {
     params: Rc<RefCell<Vec<f64>>>
 }
 
+impl LinearLayer {
+    fn new(params: Vec<f64>) -> Self {
+        LinearLayer {
+            params: Rc::new(RefCell::new(params))
+        }
+    }
+}
+
 impl TensorFunction for LinearLayer {
+    fn get_params(&self) -> Vec<f64> {
+        self.params.borrow().clone()
+    }
+
     fn get_num_params(&self) -> i64 {
         self.params.borrow().len() as i64
     }
@@ -136,7 +186,7 @@ impl TensorFunction for LinearLayer {
     fn gradient_wrt_parent(&self,
         args: &Vec<Tensor>,
         index: i64) -> Vec<f64> {
-        assert!(index == 0);
+        // assert!(index == 0);
         assert!(args.len() == 1);
         assert!(args.get(0).expect("").dim == 1);
         assert!(self.params.borrow().len() as i64 % args.get(0).expect("").size == 0);
@@ -167,7 +217,7 @@ impl TensorFunction for LinearLayer {
 }
 
 //Represents a tensor & a computational graph: 
-struct Tensor {
+pub struct Tensor {
     id: i64,
     dim: i64,
     //This is the sum of all elements of the shape
@@ -177,7 +227,7 @@ struct Tensor {
     parents: Vec<Tensor>,
     //The children nodes using the tensor
     children: Vec<Tensor>,
-    composer: Option<Box<dyn TensorFunction>>,
+    composer: Option<Rc<RefCell<dyn TensorFunction>>>,
     //Params numbers are described by the shape
     //This should belong to the function & not to the tensor itself
     // params: Option<Rc<RefCell<Vec<f64>>>>,
@@ -194,9 +244,14 @@ struct Tensor {
 }
 
 impl Tensor {
-    fn new_direct(shape: Vec<i32>,
+    fn add_child(&mut self,child: Tensor) {
+        self.children.push(child);
+    }
+
+    fn new_direct(
+        id: i64,
+        shape: Vec<i32>,
         data: Vec<f64>) -> Self {
-        let id = 0;
         let size = shape.iter().sum::<i32>() as i64;
         let dim = shape.len();
         Tensor {
@@ -215,12 +270,13 @@ impl Tensor {
         }
     }
 
-    fn new_composed(shape: Vec<i32>,
+    fn new_composed(
+        id: i64,
+        shape: Vec<i32>,
         // params: Option<Vec<f64>>,
         parents: Vec<Tensor>,
         children: Vec<Tensor>,
-        composer: Box<dyn TensorFunction>) -> Self {
-        let id = 0;
+        composer: Rc<RefCell<dyn TensorFunction>>) -> Self {
         let size = shape.iter().sum::<i32>() as i64;
         let dim = shape.len();
         Tensor {
@@ -231,11 +287,6 @@ impl Tensor {
             parents: parents,
             children: children,
             composer: Some(composer),
-            // params: if let Some(params_v) = params {
-            //     Some(Rc::new(RefCell::new(params_v)))
-            // } else {
-            //     None
-            // },
             data: Rc::new(RefCell::new(vec![0.0;size as usize])),
             gradients_self: Rc::new(RefCell::new(vec![])),
             gradients_params: Rc::new(RefCell::new(vec![])),
@@ -247,12 +298,12 @@ impl Tensor {
         m1: &Vec<Vec<f64>>,
         m2: &Vec<Vec<f64>>) -> 
     Vec<Vec<f64>> {
+        assert!(m1.len() == m2.len());
         let mut acc = Vec::new();
         for m1_row in m1.iter().enumerate() {
-            let m2_row_v = m2.get(m1_row.0).expect("");
             let mut acc_p = Vec::new();
-            for m2_row in m2_row_v.iter().enumerate() {
-                acc_p.push(m1_row.1.get(m2_row.0).expect("") + m2_row.1);
+            for m1_row_e in m1_row.1.iter().enumerate() {
+                acc_p.push(m1_row_e.1 + m2[m1_row.0][m1_row_e.0]);
             }
             acc.push(acc_p);
         }
@@ -267,11 +318,14 @@ impl Tensor {
         assert!(b == m2.len());
         let c = m2.get(0).expect("").len();
         let mut acc = vec![vec![0.0;c];a];
+        //This m1_row represents rows & m1_row represents row number
         for m1_row in m1.iter().enumerate() {
+            //This m1_row_e represents rows & m1_row_e.0 represents column number
             for m1_row_e in m1_row.1.iter().enumerate() {
-                for m2_row in m2.iter().enumerate() {
+                let m2_row = m2.get(m1_row_e.0).expect(""); 
+                for m2_row in m2_row.iter().enumerate() {
                     acc[m1_row.0][m2_row.0] += 
-                        m2_row.1.get(m1_row_e.0).expect("") * m1_row_e.1;
+                        m2_row.1 * m1_row_e.1;
                 }
             }
         }
@@ -314,7 +368,7 @@ impl ComputationNode for Tensor {
             //returned by the composer is as expected
             let parents = self.parents.as_ref();
             self.data = 
-                Rc::new(RefCell::new(composer.apply(
+                Rc::new(RefCell::new(composer.borrow().apply(
                     parents)));
         }
     }
@@ -324,25 +378,37 @@ impl ComputationNode for Tensor {
         //i.e. populates gradients_self & gradients_params: 
         //Computing the gradient_self by using the child's activation gradients 
         //& the gradients of child's activation wrt to parent activations
+        if self.children.len() == 0 {
+            println!("Skipping backward given no children {:?}",self.id);
+            return;
+        }
+        println!("Proceeding with backward {:?}",self.id);
         let l_size = self.children.get(0).expect("").get_l_size();
         let mut acc = vec![
-            vec![0.0];self.size as usize + l_size as usize];
+            vec![0.0;self.size as usize];l_size as usize];
         for child in &mut self.children {
+            println!("Proceeding with backward with child: {:?} against self {:?}",child.id,self.id);
             child.backward();
 
             //Returns [l_size, num_child_size] array
             let child_grad = 
                 child.get_gradient();
+            println!("Length of child_grad array: {:?} for id  {:?}",
+                child_grad.borrow().len(),self.id);
             //Returns [num_child_size, num_size] Jacobian
-            let child_self_grad = 
-                child.get_gradient_wrt_parent(self.id).expect("");
-            let child_grad_m = 
+            let child_self_grad_o = 
+                child.get_gradient_wrt_parent(self.id);
+            if let Some(child_self_grad) = child_self_grad_o {
+                println!("Length of child_self_grad array: {:?} for id  {:?}",
+                    child_self_grad.len(),self.id);   
+                let child_grad_m = 
                 Tensor::unflatten(child_grad.borrow().as_ref(), child.size);
-            let child_self_grad_m = 
-                Tensor::unflatten(&child_self_grad, self.size);
-            let grad_part = Tensor::multiply_matrices(
-                &child_grad_m, &child_self_grad_m);
-            acc = Tensor::add_matrices(&acc, &grad_part);
+                let child_self_grad_m = 
+                    Tensor::unflatten(&child_self_grad, self.size);
+                let grad_part = Tensor::multiply_matrices(
+                    &child_grad_m, &child_self_grad_m);
+                acc = Tensor::add_matrices(&acc, &grad_part);
+            }
         }
 
         //[l_size,num_size]
@@ -351,10 +417,10 @@ impl ComputationNode for Tensor {
         if let Some(composer) = &self.composer {
             //Compute gradients wrt to params now: 
             //[num_size,num_params]
-            let x = composer.gradient_wrt_params(&self.parents);
+            let x = composer.borrow().gradient_wrt_params(&self.parents);
             let grad_params_unflat = Tensor::multiply_matrices(
                 &acc,
-                &Tensor::unflatten(&x, composer.get_num_params()));
+                &Tensor::unflatten(&x, composer.borrow().get_num_params()));
             
             self.gradients_params = Rc::new(RefCell::new(Tensor::flatten(&grad_params_unflat)));
         }
@@ -376,7 +442,7 @@ impl ComputationNode for Tensor {
     Option<Vec<f64>> {
         if let Some(composer) = 
         &self.composer  {
-            Some(composer.gradient_wrt_parent(
+            Some(composer.borrow().gradient_wrt_parent(
                 &self.parents, index))
         } else {
             None
@@ -385,5 +451,23 @@ impl ComputationNode for Tensor {
 
     fn get_l_size(&self) -> i64 {
         self.gradients_self.borrow().len() as i64
+    }
+}
+
+impl Clone for Tensor {
+    fn clone(&self) -> Self {
+        Tensor {
+            id: self.id,
+            dim: self.dim,
+            size: self.size,
+            shape: self.shape.clone(),
+            parents: self.parents.clone(),
+            children: self.children.clone(),
+            composer: self.composer.clone(),
+            data: self.data.clone(),
+            gradients_self: self.data.clone(),
+            gradients_params: self.data.clone(),
+            l_size: 0
+        }
     }
 }

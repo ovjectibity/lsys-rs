@@ -288,8 +288,8 @@ impl Tensor {
             children: children,
             composer: Some(composer),
             data: Rc::new(RefCell::new(vec![0.0;size as usize])),
-            gradients_self: Rc::new(RefCell::new(vec![])),
-            gradients_params: Rc::new(RefCell::new(vec![])),
+            gradients_self: Rc::new(RefCell::new(vec![1.0])),
+            gradients_params: Rc::new(RefCell::new(vec![1.0])),
             l_size: 0
         }
     }
@@ -407,6 +407,15 @@ impl ComputationNode for Tensor {
                     Tensor::unflatten(&child_self_grad, self.size);
                 let grad_part = Tensor::multiply_matrices(
                     &child_grad_m, &child_self_grad_m);
+                println!("Length of grad_part array: {:?} for id {:?}",
+                    grad_part.len(),self.id);   
+                println!("Length of grad_part insides array: {:?} for id {:?}",
+                    grad_part.get(0).expect("").len(),self.id);   
+                println!("Length of acc array: {:?} for id {:?}",
+                    acc.len(),self.id);   
+                println!("Length of acc insides array: {:?} for id {:?}",
+                    acc.get(0).expect("").len(),self.id);   
+                
                 acc = Tensor::add_matrices(&acc, &grad_part);
             }
         }
@@ -465,8 +474,8 @@ impl Clone for Tensor {
             children: self.children.clone(),
             composer: self.composer.clone(),
             data: self.data.clone(),
-            gradients_self: self.data.clone(),
-            gradients_params: self.data.clone(),
+            gradients_self: self.gradients_self.clone(),
+            gradients_params: self.gradients_params.clone(),
             l_size: 0
         }
     }

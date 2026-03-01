@@ -13,7 +13,7 @@ impl FFN {
         let mut t1 = Tensor::new_direct(
             23,
             vec![4], 
-            vec![1.0,2.0,3.0,4.0]);
+            vec![1.0,2.0,3.0,4.0],false);
         let linear = 
             Rc::new(RefCell::new(LinearLayer::new(vec![1.0,1.0,1.0,1.0,
                                                                 1.0,1.0,1.0,1.0,
@@ -22,7 +22,7 @@ impl FFN {
                                                                 1.0,1.0,1.0,1.0])));
         let mut t2 = Tensor::new_composed(
             43,
-            vec![5],vec![t1.clone()],vec![],linear);
+            vec![5],vec![t1.clone()],vec![],linear,true);
         println!("T1 has: {:?} parents",t1.parents.len());
         println!("T2 has: {:?} parents",t2.parents.len());
         println!("T1 has: {:?} children",t1.children.len());
@@ -240,7 +240,8 @@ pub struct Tensor {
     //[l_size,num_size]
     gradients_self: Rc<RefCell<Vec<f64>>>,
     //[l_size,num_params]
-    gradients_params: Rc<RefCell<Vec<f64>>>
+    gradients_params: Rc<RefCell<Vec<f64>>>,
+    finaliser: bool
 }
 
 impl Tensor {
@@ -251,7 +252,8 @@ impl Tensor {
     fn new_direct(
         id: i64,
         shape: Vec<i32>,
-        data: Vec<f64>) -> Self {
+        data: Vec<f64>,
+        finaliser: bool) -> Self {
         let size = shape.iter().sum::<i32>() as i64;
         let dim = shape.len();
         Tensor {
@@ -266,7 +268,8 @@ impl Tensor {
             data: Rc::new(RefCell::new(data)),
             gradients_self: Rc::new(RefCell::new(vec![])),
             gradients_params: Rc::new(RefCell::new(vec![])),
-            l_size: 0
+            l_size: 0,
+            finaliser: finaliser
         }
     }
 
@@ -276,7 +279,8 @@ impl Tensor {
         // params: Option<Vec<f64>>,
         parents: Vec<Tensor>,
         children: Vec<Tensor>,
-        composer: Rc<RefCell<dyn TensorFunction>>) -> Self {
+        composer: Rc<RefCell<dyn TensorFunction>>,
+        finaliser: bool) -> Self {
         let size = shape.iter().sum::<i32>() as i64;
         let dim = shape.len();
         Tensor {
@@ -290,7 +294,8 @@ impl Tensor {
             data: Rc::new(RefCell::new(vec![0.0;size as usize])),
             gradients_self: Rc::new(RefCell::new(vec![1.0])),
             gradients_params: Rc::new(RefCell::new(vec![1.0])),
-            l_size: 0
+            l_size: 0,
+            finaliser: finaliser
         }
     }
 
@@ -444,7 +449,11 @@ impl ComputationNode for Tensor {
     fn get_gradient(&self) -> Rc<RefCell<Vec<f64>>> {
         //TODO: Does this need a clone? 
         //TODO: Implement this by chopping it up: 
-        self.gradients_self.clone()
+        if self.finaliser {
+            self.data.clone()
+        } else {
+            self.gradients_self.clone()
+        }
     }
 
     fn get_gradient_wrt_parent(&self,index: i64) -> 
@@ -476,7 +485,8 @@ impl Clone for Tensor {
             data: self.data.clone(),
             gradients_self: self.gradients_self.clone(),
             gradients_params: self.gradients_params.clone(),
-            l_size: 0
+            l_size: 0,
+            finaliser: self.finaliser
         }
     }
 }

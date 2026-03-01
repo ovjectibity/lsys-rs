@@ -22,24 +22,24 @@ impl FFN {
                                                                 1.0,1.0,1.0,1.0])));
         let mut t2 = Tensor::new_composed(
             43,
-            vec![5],vec![t1.clone()],vec![],linear,true);
+            vec![5],vec![t1.clone()],vec![],linear,false);
         println!("T1 has: {:?} parents",t1.parents.len());
         println!("T2 has: {:?} parents",t2.parents.len());
         println!("T1 has: {:?} children",t1.children.len());
         println!("T2 has: {:?} children",t2.children.len());
-        // let relu = 
-        //     Rc::new(RefCell::new(ReluLayer::new()));
-        // let t3 = Tensor::new_composed(
-        //     499,
-        //     vec![5],vec![t2.clone()],vec![],relu);
+        let relu = 
+            Rc::new(RefCell::new(ReluLayer::new()));
+        let t3 = Tensor::new_composed(
+            499,
+            vec![5],vec![t2.clone()],vec![],relu,true);
+        t2.add_child(t3.clone());
         t1.add_child(t2.clone());
         println!("T1 has: {:?} children",t1.children.len());
         println!("T2 has: {:?} children",t2.children.len());
         println!("T1 has: {:?} parents",t1.parents.len());
         println!("T2 has: {:?} parents",t2.parents.len());
-        // t2.add_child(t3.clone());
         FFN {
-            layers: vec![t1,t2]
+            layers: vec![t1,t2,t3]
         }
     }
 }
@@ -118,7 +118,7 @@ impl TensorFunction for ReluLayer {
     fn gradient_wrt_parent(&self,
         args: &Vec<Tensor>,
         index: i64) -> Vec<f64> {
-        assert!(index == 0);
+        // assert!(index == 0);
         assert!(args.len() == 1);
         assert!(args.get(0).expect("").dim == 1);
         let parent_size = args.get(0).expect("").size;
@@ -485,7 +485,7 @@ impl Clone for Tensor {
             data: self.data.clone(),
             gradients_self: self.gradients_self.clone(),
             gradients_params: self.gradients_params.clone(),
-            l_size: 0,
+            l_size: self.l_size,
             finaliser: self.finaliser
         }
     }

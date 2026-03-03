@@ -1,9 +1,11 @@
+pub mod tensor_legacy;
+pub mod shlo_builder;
 pub mod tensor;
 
-use tensor::ComputationNode;
+use tensor_legacy::ComputationNode;
 
 fn main() {
-    let ffn = tensor::FFN::new();
+    let ffn = tensor_legacy::FFN::new();
     let mut layers = ffn.layers;
     let len = layers.len()-1;
     {
